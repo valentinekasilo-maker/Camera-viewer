@@ -1,15 +1,11 @@
-<p align="center">
-  <img align="center" alt="logo" src="docs/static/img/branding/frigate.png">
-</p>
-
-# Frigate NVR™ with ANDRO-Vision Gemini Multimodal Intelligence
+# Camera-Viewer: ANDRO-Vision AI & Gemini Multimodal Intelligence
 
 [![License: MIT](https://img.shields.io/badge/License-MIT-yellow.svg)](https://opensource.org/licenses/MIT)
 [![Python: 3.13+](https://img.shields.io/badge/Python-3.13%2B-blue.svg)](https://www.python.org/)
 [![React: 18](https://img.shields.io/badge/React-18-61DAFB.svg)](https://reactjs.org/)
 [![Gemini: 3.6 Flash](https://img.shields.io/badge/Gemini-3.6%20Flash-purple.svg)](https://deepmind.google/technologies/gemini/)
 
-A complete, local NVR designed for Home Assistant and standalone enterprise CCTV monitoring, featuring the **ANDRO-Vision Camera Intelligence Engine** powered by **Google Gemini 3.6 Flash** for multimodal camera reasoning, natural voice interaction, live frame visual analysis, and zero-hallucination multi-camera tracking.
+A complete, high-performance local AI Camera Intelligence and NVR monitoring system, featuring the **ANDRO-Vision Camera Intelligence Engine** powered by **Google Gemini 3.6 Flash** for multimodal camera reasoning, real-time voice interaction, live frame visual analysis, and zero-hallucination multi-camera tracking.
 
 ---
 
@@ -30,11 +26,11 @@ A complete, local NVR designed for Home Assistant and standalone enterprise CCTV
 - **Voice Speech-to-Text (STT)**: Direct microphone button in the query bar using the Web Speech API (`SpeechRecognition`).
 - **Natural Voice Synthesis (TTS)**: Reads answers out loud with pleasant speech synthesis and provides an **Auto-Voice** mode for hands-free operations.
 
-### 4. 📹 Real-Time NVR & Multi-Camera Management
+### 4. 📹 Real-Time Camera Management & Video Streaming
 - **Low-Overhead Object Detection**: Hardware-accelerated object detection via OpenCV, TensorFlow, ONNX, OpenVINO, Coral TPU, and TensorRT.
 - **Live Video Streaming**: WebRTC, MSE, and RTSP re-streaming powered by go2rtc.
 - **24/7 & Event Recording**: Smart retention rules based on detected objects, zones, and review segments.
-- **Home Assistant Integration**: Seamless real-time entity updates, WebSockets, and MQTT broadcasts.
+- **Home Automation Integration**: Seamless real-time entity updates, WebSockets, and MQTT broadcasts.
 
 ---
 
@@ -163,8 +159,6 @@ npm run build
 
 This project is licensed under the **MIT License**. See the [LICENSE](LICENSE) file for details.
 
-The "Frigate" name and Frigate logo are trademarks of Frigate, Inc. and are subject to the [Trademark Policy](TRADEMARK.md).
-
 ---
 
-**Copyright © 2026 Frigate, Inc. & ANDRO-Vision**
+**Copyright © 2026 ANDRO-Vision Camera-Viewer**
