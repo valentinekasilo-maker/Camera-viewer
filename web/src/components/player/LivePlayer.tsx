@@ -1,0 +1,585 @@
+import WebRtcPlayer from "./WebRTCPlayer";
+import { CameraConfig } from "@/types/frigateConfig";
+import AutoUpdatingCameraImage from "../camera/AutoUpdatingCameraImage";
+import ActivityIndicator from "../indicators/activity-indicator";
+import { useCallback, useEffect, useMemo, useRef, useState } from "react";
+import { useResizeObserver } from "@/hooks/resize-observer";
+import MSEPlayer from "./MsePlayer";
+import JSMpegPlayer from "./JSMpegPlayer";
+import { MdCircle } from "react-icons/md";
+import { Tooltip, TooltipContent, TooltipTrigger } from "../ui/tooltip";
+import { useCameraActivity } from "@/hooks/use-camera-activity";
+import {
+  LivePlayerError,
+  LivePlayerMode,
+  PlayerStatsType,
+  VideoResolutionType,
+} from "@/types/live";
+import { getIconForLabel } from "@/utils/iconUtil";
+import Chip from "../indicators/Chip";
+import { cn } from "@/lib/utils";
+import { TbExclamationCircle } from "react-icons/tb";
+import { TooltipPortal } from "@radix-ui/react-tooltip";
+import { baseUrl } from "@/api/baseUrl";
+import { PlayerStats } from "./PlayerStats";
+import { LuVideoOff } from "react-icons/lu";
+import { Trans, useTranslation } from "react-i18next";
+import { useCameraFriendlyName } from "@/hooks/use-camera-friendly-name";
+import { ImageShadowOverlay } from "../overlay/ImageShadowOverlay";
+import { getTranslatedLabel } from "@/utils/i18n";
+import { formatList } from "@/utils/stringUtil";
+
+type LivePlayerProps = {
+  cameraRef?: (ref: HTMLDivElement | null) => void;
+  containerRef?: React.MutableRefObject<HTMLDivElement | null>;
+  className?: string;
+  cameraConfig: CameraConfig;
+  streamName: string;
+  preferredLiveMode: LivePlayerMode;
+  showStillWithoutActivity?: boolean;
+  alwaysShowCameraName?: boolean;
+  useWebGL: boolean;
+  windowVisible?: boolean;
+  playAudio?: boolean;
+  volume?: number;
+  playInBackground: boolean;
+  micEnabled?: boolean; // only webrtc supports mic
+  iOSCompatFullScreen?: boolean;
+  pip?: boolean;
+  autoLive?: boolean;
+  showStats?: boolean;
+  onClick?: () => void;
+  setFullResolution?: React.Dispatch<React.SetStateAction<VideoResolutionType>>;
+  onError?: (error: LivePlayerError) => void;
+  onResetLiveMode?: () => void;
+};
+
+export default function LivePlayer({
+  cameraRef = undefined,
+  containerRef,
+  className,
+  cameraConfig,
+  streamName,
+  preferredLiveMode,
+  showStillWithoutActivity = true,
+  alwaysShowCameraName = false,
+  useWebGL = false,
+  windowVisible = true,
+  playAudio = false,
+  volume,
+  playInBackground = false,
+  micEnabled = false,
+  iOSCompatFullScreen = false,
+  pip,
+  autoLive = true,
+  showStats = false,
+  onClick,
+  setFullResolution,
+  onError,
+  onResetLiveMode,
+}: LivePlayerProps) {
+  const { t } = useTranslation(["components/player"]);
+
+  const internalContainerRef = useRef<HTMLDivElement | null>(null);
+  const overlayRef = useRef<HTMLDivElement | null>(null);
+
+  const cameraName = useCameraFriendlyName(cameraConfig);
+
+  // player is showing on a dashboard if containerRef is not provided
+
+  const inDashboard = containerRef?.current == null;
+
+  const [overlayDimensions] = useResizeObserver(overlayRef);
+  const isCompact =
+    overlayDimensions.width > 0 && overlayDimensions.width < 280;
+
+  // stats
+
+  const [stats, setStats] = useState<PlayerStatsType>({
+    streamType: "-",
+    bandwidth: 0, // in kBps
+    latency: undefined, // in seconds
+    totalFrames: 0,
+    droppedFrames: undefined,
+    decodedFrames: 0,
+    droppedFrameRate: 0, // percentage
+  });
+
+  // camera activity
+
+  const {
+    enabled: cameraEnabled,
+    activeMotion,
+    activeTracking,
+    objects,
+    offline,
+  } = useCameraActivity(cameraConfig);
+
+  const cameraActive = useMemo(
+    () =>
+      !showStillWithoutActivity ||
+      (windowVisible && (activeMotion || activeTracking)),
+    [activeMotion, activeTracking, showStillWithoutActivity, windowVisible],
+  );
+
+  // camera live state
+
+  const [liveReady, setLiveReady] = useState(false);
+
+  const liveReadyRef = useRef(liveReady);
+  const cameraActiveRef = useRef(cameraActive);
+
+  useEffect(() => {
+    liveReadyRef.current = liveReady;
+    cameraActiveRef.current = cameraActive;
+  }, [liveReady, cameraActive]);
+
+  useEffect(() => {
+    if (!autoLive || !liveReady) {
+      return;
+    }
+
+    if (!cameraActive) {
+      const timer = setTimeout(() => {
+        if (liveReadyRef.current && !cameraActiveRef.current) {
+          setLiveReady(false);
+          onResetLiveMode?.();
+        }
+      }, 500);
+
+      return () => {
+        clearTimeout(timer);
+      };
+    }
+    // live mode won't change
+    // eslint-disable-next-line react-hooks/exhaustive-deps
+  }, [autoLive, cameraActive, liveReady]);
+
+  // camera still state
+
+  const stillReloadInterval = useMemo(() => {
+    if (!windowVisible || offline || !showStillWithoutActivity) {
+      return -1; // no reason to update the image when the window is not visible
+    }
+
+    if (liveReady && !cameraActive) {
+      return 120000;
+    }
+
+    if (liveReady) {
+      return 120000;
+    }
+
+    // In dashboard card view, refresh snapshots every 2 minutes (120,000 ms)
+    if (inDashboard) {
+      return 120000;
+    }
+
+    if (activeMotion || activeTracking) {
+      if (autoLive) {
+        return 1000;
+      } else {
+        return 60000;
+      }
+    }
+
+    return 120000;
+  }, [
+    autoLive,
+    showStillWithoutActivity,
+    liveReady,
+    activeMotion,
+    activeTracking,
+    offline,
+    windowVisible,
+    cameraActive,
+    inDashboard,
+  ]);
+
+  useEffect(() => {
+    setLiveReady(false);
+  }, [preferredLiveMode]);
+
+  const [key, setKey] = useState(0);
+  const prevStreamNameRef = useRef(streamName);
+
+  const resetPlayer = () => {
+    setLiveReady(false);
+    setKey((prevKey) => prevKey + 1);
+  };
+
+  useEffect(() => {
+    if (prevStreamNameRef.current !== streamName) {
+      prevStreamNameRef.current = streamName;
+      if (streamName) {
+        resetPlayer();
+      }
+    }
+  }, [streamName]);
+
+  useEffect(() => {
+    if (showStillWithoutActivity && !autoLive) {
+      setLiveReady(false);
+    }
+  }, [showStillWithoutActivity, autoLive]);
+
+  const playerIsPlaying = useCallback(() => {
+    setLiveReady(true);
+  }, []);
+
+  // enabled states
+
+  const [isReEnabling, setIsReEnabling] = useState(false);
+  const prevCameraEnabledRef = useRef(cameraEnabled ?? true);
+
+  useEffect(() => {
+    if (cameraEnabled == undefined) {
+      return;
+    }
+    if (!prevCameraEnabledRef.current && cameraEnabled) {
+      // Camera enabled
+      setLiveReady(false);
+      setIsReEnabling(true);
+      setKey((prevKey) => prevKey + 1);
+    } else if (prevCameraEnabledRef.current && !cameraEnabled) {
+      // Camera disabled
+      setLiveReady(false);
+      setKey((prevKey) => prevKey + 1);
+    }
+    prevCameraEnabledRef.current = cameraEnabled;
+  }, [cameraEnabled]);
+
+  useEffect(() => {
+    if (liveReady && isReEnabling) {
+      setIsReEnabling(false);
+    }
+  }, [liveReady, isReEnabling]);
+
+  if (!cameraConfig) {
+    return <ActivityIndicator />;
+  }
+
+  let player;
+  if (!autoLive || !streamName || !cameraEnabled) {
+    player = null;
+  } else if (preferredLiveMode == "webrtc") {
+    player = (
+      <WebRtcPlayer
+        key={"webrtc_" + key}
+        className={`size-full rounded-lg md:rounded-2xl ${liveReady ? "" : "hidden"}`}
+        camera={streamName}
+        playbackEnabled={cameraActive || liveReady}
+        getStats={showStats}
+        setStats={setStats}
+        audioEnabled={playAudio}
+        volume={volume}
+        microphoneEnabled={micEnabled}
+        iOSCompatFullScreen={iOSCompatFullScreen}
+        onPlaying={playerIsPlaying}
+        pip={pip}
+        onError={onError}
+      />
+    );
+  } else if (preferredLiveMode == "mse") {
+    if ("MediaSource" in window || "ManagedMediaSource" in window) {
+      player = (
+        <MSEPlayer
+          key={"mse_" + key}
+          className={`size-full rounded-lg md:rounded-2xl ${liveReady ? "" : "hidden"}`}
+          camera={streamName}
+          playbackEnabled={cameraActive || liveReady}
+          audioEnabled={playAudio}
+          volume={volume}
+          playInBackground={playInBackground}
+          getStats={showStats}
+          setStats={setStats}
+          onPlaying={playerIsPlaying}
+          pip={pip}
+          setFullResolution={setFullResolution}
+          onError={onError}
+        />
+      );
+    } else {
+      player = (
+        <div className="w-5xl text-center text-sm">
+          {t("livePlayerRequiredIOSVersion")}
+        </div>
+      );
+    }
+  } else if (preferredLiveMode == "jsmpeg") {
+    if (cameraActive || !showStillWithoutActivity || liveReady) {
+      player = (
+        <JSMpegPlayer
+          key={"jsmpeg_" + key}
+          className="flex justify-center overflow-hidden rounded-lg md:rounded-2xl"
+          camera={cameraConfig.name}
+          width={cameraConfig.detect.width}
+          height={cameraConfig.detect.height}
+          playbackEnabled={
+            cameraActive || !showStillWithoutActivity || liveReady
+          }
+          useWebGL={useWebGL}
+          setStats={setStats}
+          containerRef={containerRef ?? internalContainerRef}
+          onPlaying={playerIsPlaying}
+        />
+      );
+    } else {
+      player = null;
+    }
+  } else {
+    player = <ActivityIndicator />;
+  }
+
+  return (
+    <div
+      ref={(node) => {
+        overlayRef.current = node;
+        if (cameraRef) {
+          cameraRef(node);
+        } else {
+          internalContainerRef.current = node;
+        }
+      }}
+      data-camera={cameraConfig.name}
+      className={cn(
+        "relative flex w-full cursor-pointer justify-center outline",
+        activeTracking &&
+          ((showStillWithoutActivity && !liveReady) || liveReady)
+          ? "outline-3 rounded-lg shadow-severity_alert outline-severity_alert md:rounded-2xl"
+          : "outline-0 outline-background",
+        "transition-all duration-500",
+        className,
+      )}
+      onClick={onClick}
+      onAuxClick={(e) => {
+        if (e.button === 1) {
+          window.open(`${baseUrl}#${cameraConfig.name}`, "_blank")?.focus();
+        }
+      }}
+    >
+      {cameraEnabled &&
+        ((showStillWithoutActivity && !liveReady) || liveReady) && (
+          <ImageShadowOverlay
+            upperClassName="md:rounded-2xl"
+            lowerClassName="md:rounded-2xl"
+          />
+        )}
+      {player}
+      {cameraEnabled &&
+        !offline &&
+        (!showStillWithoutActivity || isReEnabling) &&
+        !liveReady && <ActivityIndicator />}
+
+      {/* Live Object Detection Bounding Box Overlay */}
+      {((showStillWithoutActivity && !liveReady) || liveReady) &&
+        objects.length > 0 && (
+          <div className="pointer-events-none absolute inset-0 z-30 overflow-hidden">
+            {objects.map((obj) => {
+              if (!obj.box || obj.stationary) return null;
+              const [ymin, xmin, ymax, xmax] = obj.box;
+              const isNorm = xmax <= 1.0 && ymax <= 1.0;
+              const top = isNorm ? ymin * 100 : (ymin / cameraConfig.detect.height) * 100;
+              const left = isNorm ? xmin * 100 : (xmin / cameraConfig.detect.width) * 100;
+              const width = isNorm ? (xmax - xmin) * 100 : ((xmax - xmin) / cameraConfig.detect.width) * 100;
+              const height = isNorm ? (ymax - ymin) * 100 : ((ymax - ymin) / cameraConfig.detect.height) * 100;
+              const scorePct = obj.score ? Math.round(obj.score * 100) : null;
+
+              return (
+                <div
+                  key={obj.id}
+                  style={{
+                    top: `${Math.max(0, Math.min(96, top))}%`,
+                    left: `${Math.max(0, Math.min(96, left))}%`,
+                    width: `${Math.max(3, Math.min(100, width))}%`,
+                    height: `${Math.max(3, Math.min(100, height))}%`,
+                  }}
+                  className="absolute rounded border-2 border-emerald-400/90 bg-emerald-500/10 shadow-[0_0_8px_rgba(52,211,153,0.4)] transition-all duration-200"
+                >
+                  <div className="absolute -top-6 left-0 flex items-center gap-1 rounded bg-emerald-600/90 px-1.5 py-0.5 text-[10px] font-semibold uppercase tracking-wider text-white shadow backdrop-blur-sm">
+                    <span>{obj.sub_label || obj.label}</span>
+                    {scorePct !== null && (
+                      <span className="text-emerald-200">{scorePct}%</span>
+                    )}
+                  </div>
+                </div>
+              );
+            })}
+          </div>
+        )}
+
+      {/* Detection Object Chips & Camera Detection Status */}
+      {((showStillWithoutActivity && !liveReady) || liveReady) && (
+        <div className="absolute left-2 top-2 z-40 flex items-center gap-1.5">
+          {objects.length > 0 && (
+            <Tooltip>
+              <TooltipTrigger asChild>
+                <div className="pb-1 text-sm text-white">
+                  <Chip
+                    className="z-0 flex items-center justify-between space-x-1 bg-emerald-700/80 bg-gradient-to-br from-emerald-600/90 to-teal-700/90 text-white shadow backdrop-blur-sm"
+                  >
+                    {[
+                      ...new Set([
+                        ...(objects || []).map(({ label }) => label),
+                      ]),
+                    ]
+                      .map((label) => {
+                        return getIconForLabel(
+                          label,
+                          "object",
+                          "size-3 text-white",
+                        );
+                      })
+                      .sort()}
+                  </Chip>
+                </div>
+              </TooltipTrigger>
+              <TooltipPortal>
+                <TooltipContent>
+                  {formatList(
+                    [
+                      ...new Set(
+                        (objects || [])
+                          .map(({ label, sub_label }) => {
+                            const isManual = label.endsWith("verified");
+                            const text = isManual ? sub_label : label;
+                            const type = isManual ? "manual" : "object";
+                            return getTranslatedLabel(text, type);
+                          })
+                          .filter(
+                            (translated) =>
+                              translated && !translated.includes("-verified"),
+                          ),
+                      ),
+                    ].sort(),
+                  )}
+                </TooltipContent>
+              </TooltipPortal>
+            </Tooltip>
+          )}
+
+          {/* Camera Detection Status Badge */}
+          {cameraConfig.detect.enabled !== false && (
+            <div className="flex items-center gap-1 rounded-full bg-black/40 px-2 py-0.5 text-[10px] font-medium text-white/90 backdrop-blur-md">
+              <span
+                className={cn(
+                  "size-1.5 rounded-full",
+                  offline
+                    ? "bg-red-500"
+                    : objects.length > 0 && !objects.every((o) => o.stationary)
+                      ? "animate-pulse bg-emerald-400 shadow-[0_0_6px_#34d399]"
+                      : "bg-emerald-500/70",
+                )}
+              />
+              <span className="hidden sm:inline">
+                {offline
+                  ? t("detectionStatus.disconnected", { defaultValue: "Offline" })
+                  : objects.length > 0 && !objects.every((o) => o.stationary)
+                    ? t("detectionStatus.detecting", { defaultValue: "Detecting" })
+                    : t("detectionStatus.enabled", { defaultValue: "Detect: ON" })}
+              </span>
+            </div>
+          )}
+        </div>
+      )}
+
+      <div
+        className={cn(
+          "absolute inset-0 w-full",
+          showStillWithoutActivity &&
+            !liveReady &&
+            !isReEnabling &&
+            cameraEnabled
+            ? "visible"
+            : "invisible",
+        )}
+      >
+        <AutoUpdatingCameraImage
+          className="pointer-events-none size-full"
+          cameraClasses="relative size-full flex justify-center"
+          camera={cameraConfig.name}
+          showFps={false}
+          reloadInterval={stillReloadInterval}
+          periodicCache
+        />
+      </div>
+
+      {offline && inDashboard && (
+        <>
+          <div className="absolute inset-0 rounded-lg bg-black/50 md:rounded-2xl" />
+          <div className="absolute inset-0 left-1/2 top-1/2 flex -translate-x-1/2 -translate-y-1/2 items-center justify-center">
+            <div className="flex flex-col items-center justify-center gap-2 rounded-lg bg-background/50 p-3 text-center">
+              <div>{t("streamOffline.title")}</div>
+              <TbExclamationCircle className="size-6" />
+              {!isCompact && (
+                <p className="text-center text-sm">
+                  <Trans
+                    ns="components/player"
+                    values={{
+                      cameraName: cameraName,
+                    }}
+                  >
+                    streamOffline.desc
+                  </Trans>
+                </p>
+              )}
+            </div>
+          </div>
+        </>
+      )}
+
+      {offline && !showStillWithoutActivity && cameraEnabled && (
+        <div className="absolute inset-0 left-1/2 top-1/2 flex h-96 w-96 -translate-x-1/2 -translate-y-1/2">
+          <div className="flex flex-col items-center justify-center rounded-lg bg-background/50 p-5">
+            <p className="my-5 text-lg">{t("streamOffline.title")}</p>
+            <TbExclamationCircle className="mb-3 size-10" />
+            {!isCompact && (
+              <p className="max-w-96 text-center">
+                <Trans
+                  ns="components/player"
+                  values={{
+                    cameraName: cameraName,
+                  }}
+                >
+                  streamOffline.desc
+                </Trans>
+              </p>
+            )}
+          </div>
+        </div>
+      )}
+
+      {!cameraEnabled && (
+        <div className="relative flex h-full w-full items-center justify-center rounded-2xl border border-secondary-foreground bg-background_alt">
+          <div className="flex h-32 flex-col items-center justify-center rounded-lg p-4 md:h-48 md:w-48">
+            <LuVideoOff className="mb-2 size-8 md:size-10" />
+            <p className="max-w-32 text-center text-sm md:max-w-40 md:text-base">
+              {t("cameraOff")}
+            </p>
+          </div>
+        </div>
+      )}
+
+      <div className="absolute right-2 top-2 flex items-center gap-3">
+        {(alwaysShowCameraName ||
+          (offline && showStillWithoutActivity) ||
+          !cameraEnabled) && (
+          <Chip
+            className={`z-0 flex items-start justify-between space-x-1 bg-gray-500 bg-gradient-to-br from-gray-400 to-gray-500 text-xs capitalize`}
+          >
+            {cameraName}
+          </Chip>
+        )}
+        {autoLive &&
+          !offline &&
+          activeMotion &&
+          ((showStillWithoutActivity && !liveReady) || liveReady) && (
+            <MdCircle className="mr-2 size-2 animate-pulse text-danger shadow-danger drop-shadow-md" />
+          )}
+      </div>
+      {showStats && (
+        <PlayerStats stats={stats} minimal={cameraRef !== undefined} />
+      )}
+    </div>
+  );
+}

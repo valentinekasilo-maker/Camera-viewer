@@ -1,0 +1,168 @@
+---
+id: state_classification
+title: State Classification
+---
+
+import ConfigTabs from "@site/src/components/ConfigTabs";
+import TabItem from "@theme/TabItem";
+import NavPath from "@site/src/components/NavPath";
+
+State classification allows you to train a custom MobileNetV2 classification model on a fixed region of your camera frame(s) to determine a current state. The model can be configured to run on a schedule and/or when motion is detected in that region. Classification results are available through the `frigate/<camera_name>/classification/<model_name>` MQTT topic and in Home Assistant sensors via the official Frigate integration.
+
+:::info
+
+Training a custom state classification model requires an internet connection to download MobileNetV2 base weights. By default these weights are not cached in `/config/`, so they are downloaded again after the container is recreated. Once trained, the model runs fully offline. See [Network Requirements](/frigate/network_requirements#one-time-model-downloads) for details.
+
+:::
+
+## Minimum System Requirements
+
+State classification models are lightweight and run very fast on CPU.
+
+Training the model does briefly use a high amount of system resources for about 1-3 minutes per training run. On lower-power devices, training may take longer.
+
+A CPU with AVX + AVX2 instructions is required for training and inference.
+
+## Classes
+
+Classes are the different states an area on your camera can be in. Each class represents a distinct visual state that the model will learn to recognize.
+
+For state classification:
+
+- Define classes that represent mutually exclusive states
+- Examples: `open` and `closed` for a garage door, `on` and `off` for lights
+- Use at least 2 classes (typically binary states work best)
+- Keep class names clear and descriptive
+
+## Example use cases
+
+- **Door state**: Detect if a garage or front door is open vs closed.
+- **Gate state**: Track if a driveway gate is open or closed.
+- **Trash day**: Bins at curb vs no bins present.
+- **Pool cover**: Cover on vs off.
+
+## Configuration
+
+State classification is configured as a custom classification model. Each model has its own name and settings. Provide at least one camera crop under `state_config.cameras`.
+
+<ConfigTabs>
+<TabItem value="ui">
+
+Navigate to the **Classification** page from the main navigation sidebar, select the **States** tab, then click **Add Classification**.
+
+In the **Create New Classification** dialog:
+
+| Field       | Description                                                                          |
+| ----------- | ------------------------------------------------------------------------------------ |
+| **Name**    | A name for your state classification model (e.g., `front_door`)                      |
+| **Type**    | Select **State** for state classification                                            |
+| **Classes** | The state names the model will learn to distinguish between (e.g., `open`, `closed`) |
+
+After creating the model, the wizard will guide you through selecting the camera crop area and assigning training examples. The `threshold` (default: `0.8`), `motion`, and `interval` settings can be adjusted in the YAML configuration.
+
+</TabItem>
+<TabItem value="yaml">
+
+```yaml
+classification:
+  custom:
+    front_door:
+      threshold: 0.8
+      state_config:
+        motion: true # run when motion overlaps the crop
+        interval: 10 # also run every N seconds (optional)
+        cameras:
+          front:
+            # [x1, y1, x2, y2] as decimals between 0 and 1, relative to the
+            # camera's detect resolution
+            crop: [0.0, 0.25, 0.3, 0.85]
+```
+
+Crop coordinates are normalized: each value is a fraction of the camera's `detect` width or height, not a pixel value. Drawing the crop in the UI wizard writes these values for you.
+
+An optional config, `save_attempts`, can be set as a key under the model name. This defines the number of classification attempts to save in the Recent Classifications tab. For state classification models, the default is 100.
+
+</TabItem>
+</ConfigTabs>
+
+## Training the model
+
+Creating and training the model is done within the Frigate UI using the `Classification` page. The process consists of three steps:
+
+### Step 1: Name and Define
+
+Enter a name for your model and define at least 2 classes (states) that represent mutually exclusive states. For example, `open` and `closed` for a door, or `on` and `off` for lights.
+
+### Step 2: Select the Crop Area
+
+Choose one or more cameras and draw a rectangle over the area of interest for each camera. The crop should be tight around the region you want to classify to avoid extra signals unrelated to what is being classified. You can drag and resize the rectangle to adjust the crop area.
+
+### Step 3: Assign Training Examples
+
+The system will automatically generate example images from your camera feeds. You'll be guided through each class one at a time to select which images represent that state. It's not strictly required to select all images you see. If a state is missing from the samples, you can train it from the Recent tab later.
+
+Once some images are assigned, training will begin automatically.
+
+### Improving the Model
+
+:::tip Diversity matters far more than volume
+
+Selecting dozens of nearly identical images is one of the fastest ways to degrade model performance. MobileNetV2 can overfit quickly when trained on homogeneous data. The model learns what _that exact moment_ looked like rather than what actually defines the state. This often leads to models that work perfectly under the original conditions but become unstable when day turns to night, weather changes, or seasonal lighting shifts. **This is why Frigate does not implement bulk training in the UI.**
+
+For more detail, see [Frigate Tip: Best Practices for Training Face and Custom Classification Models](https://github.com/blakeblackshear/frigate/discussions/21374).
+
+:::
+
+- **Start small and iterate**: Begin with a small, representative set of images per class. Models often begin working well with surprisingly few examples and improve naturally over time.
+- **Problem framing**: Keep classes visually distinct and state-focused (e.g., `open`, `closed`, `unknown`). Avoid combining object identity with state in a single model unless necessary.
+- **Data collection**: Use the model's Recent Classifications tab to gather balanced examples across times of day and weather.
+- **When to train**: Focus on cases where the model is entirely incorrect or flips between states when it should not. There's no need to train additional images when the model is already working consistently.
+- **Favor hard examples**: When images appear in the Recent Classifications tab, prioritize images scoring below 90-100% or those captured under new conditions (e.g., first snow of the year, seasonal changes, objects temporarily in view, insects at night). These represent scenarios different from the default state and help prevent overfitting.
+- **Avoid bulk training similar images**: Training large batches of images that already score 100% (or close) adds little new information and increases the risk of overfitting.
+- **The wizard is just the starting point**: You don't need to find and label every state upfront. Missing states will naturally appear in Recent Classifications, and those images tend to be more valuable because they represent new conditions and edge cases.
+
+## Debugging Classification Models
+
+To troubleshoot issues with state classification models, enable debug logging to see detailed information about classification attempts, scores, and state verification.
+
+Enable debug logs for classification models by adding `frigate.data_processing.real_time.custom_classification: debug` to your `logger` configuration. These logs are verbose, so only keep this enabled when necessary. Restart Frigate after this change.
+
+<ConfigTabs>
+<TabItem value="ui">
+
+Navigate to <NavPath path="Settings > System > Logging" />.
+
+- Set **Logging level** to `debug`
+- Set **Per-process log level > `frigate.data_processing.real_time.custom_classification`** to `debug` for verbose classification logging
+
+</TabItem>
+<TabItem value="yaml">
+
+```yaml
+logger:
+  default: info
+  logs:
+    # highlight-next-line
+    frigate.data_processing.real_time.custom_classification: debug
+```
+
+</TabItem>
+</ConfigTabs>
+
+The debug logs will show:
+
+- Classification probabilities for each attempt
+- Whether scores meet the threshold requirement
+- State verification progress (consecutive detections needed)
+- When state changes are published
+
+### Recent Classifications
+
+For state classification, images are only added to recent classifications under specific circumstances:
+
+- **First detection**: The first classification attempt for a camera is always saved
+- **State changes**: Images are saved when the detected state differs from the current verified state
+- **Pending verification**: Images are saved when there's a pending state change being verified (requires 3 consecutive identical states)
+- **Low confidence**: Images with scores below 100% are saved even if the state matches the current state (useful for training)
+
+Images are **not** saved when the state is stable (detected state matches current state) **and** the score is 100%. This prevents unnecessary storage of redundant high-confidence classifications.

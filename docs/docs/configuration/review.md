@@ -1,0 +1,161 @@
+---
+id: review
+title: Review
+---
+
+import ConfigTabs from "@site/src/components/ConfigTabs";
+import TabItem from "@theme/TabItem";
+import NavPath from "@site/src/components/NavPath";
+
+The Review page of the Frigate UI is for quickly reviewing historical footage of interest from your cameras. _Review items_ are indicated on a vertical timeline and displayed as a grid of previews - bandwidth-optimized, low frame rate, low resolution videos. Hovering over or swiping a preview plays the video and marks it as reviewed. If more in-depth analysis is required, the preview can be clicked/tapped and the full frame rate, full resolution recording is displayed.
+
+Review items are filterable by date, object type, and camera.
+
+### Review items vs. tracked objects (formerly "events")
+
+In Frigate 0.13 and earlier versions, the UI presented "events". An event was synonymous with a tracked or detected object. In Frigate 0.14 and later, a review item is a time period where any number of tracked objects were active.
+
+For example, consider a situation where two people walked past your house. One was walking a dog. At the same time, a car drove by on the street behind them.
+
+In this scenario, Frigate 0.13 and earlier would show 4 "events" in the UI - one for each person, another for the dog, and yet another for the car. You would have had 4 separate videos to watch even though they would have all overlapped.
+
+In 0.14 and later, all of that is bundled into a single review item which starts and ends to capture all of that activity. Reviews for a single camera cannot overlap. Once you have watched that time period on that camera, it is marked as reviewed.
+
+## Alerts and Detections
+
+Not every segment of video captured by Frigate may be of the same level of interest to you. Video of people who enter your property may be a different priority than those walking by on the sidewalk. For this reason, Frigate categorizes review items as _alerts_ and _detections_. By default, all person and car objects are considered alerts. You can refine categorization of your review items by configuring [required zones](/configuration/zones#restricting-alerts-and-detections-to-specific-zones) for them.
+
+:::note
+
+Alerts and detections categorize the tracked objects in review items, but Frigate must first detect those objects with your configured object detector (Coral, OpenVINO, etc). By default, the object tracker only detects `person`. Setting `labels` for `alerts` and `detections` does not automatically enable detection of new objects. To detect more than `person`, you should add more labels via <NavPath path="Settings > Global configuration > Objects" /> or <NavPath path="Settings > Camera configuration > Objects" /> and select your camera. Alternatively, add the following to your config:
+
+```yaml
+objects:
+  track:
+    - person
+    - car
+    - ...
+```
+
+See the [objects documentation](objects.md) for the list of objects that Frigate's default model tracks.
+:::
+
+## Restricting alerts to specific labels
+
+By default a review item will only be marked as an alert if a person or car is detected. Configure the alert labels to include any object or audio label.
+
+<ConfigTabs>
+<TabItem value="ui">
+
+Navigate to <NavPath path="Settings > Global configuration > Review" /> or <NavPath path="Settings > Camera configuration > Review" /> and select your camera.
+
+Expand **Alerts config** and configure which labels and zones should generate alerts.
+
+</TabItem>
+<TabItem value="yaml">
+
+```yaml
+# can be overridden at the camera level
+review:
+  alerts:
+    labels:
+      - car
+      - cat
+      - dog
+      - person
+      - speech
+```
+
+</TabItem>
+</ConfigTabs>
+
+## Restricting detections to specific labels
+
+By default all detections that do not qualify as an alert qualify as a detection. However, detections can further be filtered to only include certain labels or certain zones.
+
+<ConfigTabs>
+<TabItem value="ui">
+
+Navigate to <NavPath path="Settings > Global configuration > Review" /> or <NavPath path="Settings > Camera configuration > Review" /> and select your camera.
+
+Expand **Detections config** and configure which labels should qualify as detections.
+
+</TabItem>
+<TabItem value="yaml">
+
+```yaml
+# can be overridden at the camera level
+review:
+  detections:
+    labels:
+      - bark
+      - dog
+```
+
+</TabItem>
+</ConfigTabs>
+
+## Excluding a camera from alerts or detections
+
+To exclude a specific camera from alerts or detections, provide an empty list to the alerts or detections labels field at the camera level.
+
+For example, to exclude objects on the camera _gatecamera_ from any detections:
+
+<ConfigTabs>
+<TabItem value="ui">
+
+1. Navigate to <NavPath path="Settings > Camera configuration > Review" /> and select the **gatecamera** camera.
+   - Expand **Detections config** and turn off all of the object label switches.
+
+</TabItem>
+<TabItem value="yaml">
+
+```yaml {3-5}
+cameras:
+  gatecamera:
+    review:
+      detections:
+        labels: []
+```
+
+</TabItem>
+</ConfigTabs>
+
+## Categorizing manual events
+
+Events created with the [create manual event API](../integrations/api/create-event-events-camera-name-label-create-post.api.mdx) are categorized with the same label lists, using the label from the request path:
+
+1. If alerts are enabled and the label is listed in `review -> alerts -> labels`, the review item is an alert.
+2. Otherwise, if detections are enabled and the label is listed in `review -> detections -> labels`, the review item is a detection.
+3. If the label is in neither list, the review item is an alert, or no review item is created if alerts are disabled.
+
+This means manual events are alerts unless you explicitly list their label as a detection label. For example, to have PIR sensors create detections instead of alerts, post to `/api/events/front_door/pir_sensor/create` with the following config:
+
+```yaml {5-7}
+cameras:
+  front_door:
+    review:
+      detections:
+        labels:
+          - pir_sensor
+```
+
+:::note
+
+Required zones do not apply to manual events, since they are created through the API rather than by the object tracker. Setting `review -> alerts -> labels` to an empty list also does not stop manual events from becoming alerts, as a label in neither list still falls back to an alert.
+
+:::
+
+## Restricting review items to specific zones
+
+By default a review item will be created if any `review -> alerts -> labels` and `review -> detections -> labels` are detected anywhere in the camera frame. You will likely want to configure review items to only be created when the object enters an area of interest, [see the zone docs for more information](./zones.md#restricting-alerts-and-detections-to-specific-zones)
+
+:::info
+
+Because zones don't apply to audio, audio labels will always be marked as a detection by default.
+
+:::
+
+## Reviewing Motion
+
+The Review page can also surface periods of motion that didn't produce a tracked object, and lets you search past recordings for motion in a region you draw. See [Reviewing Motion](/usage/review#reviewing-motion) in the Usage docs for how to use **Motion Previews** and **Motion Search**, and [Tuning Motion Detection](motion_detection.md) for configuring the underlying motion detector.

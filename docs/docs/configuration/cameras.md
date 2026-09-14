@@ -1,0 +1,286 @@
+---
+id: cameras
+title: Camera Configuration
+---
+
+import ConfigTabs from "@site/src/components/ConfigTabs";
+import TabItem from "@theme/TabItem";
+import NavPath from "@site/src/components/NavPath";
+
+## Adding a camera with the Add Camera Wizard
+
+The Add Camera Wizard is the recommended way to add a camera. Click **Add Camera** in <NavPath path="Settings > Global configuration > Camera management" />, or use it from the [setup wizard](../guides/getting_started.md#configuring-frigate) on a new install. The wizard connects to your camera, tests each stream, and writes the camera's configuration for you, including the [go2rtc](go2rtc.md) restream and the live view stream mapping, so a standard setup needs no hand-written YAML.
+
+### Step 1: Name and connection
+
+Enter a name for the camera along with its host or IP address and credentials, then choose how the wizard should find the camera's streams:
+
+- **Probe camera** queries the camera over ONVIF (the ONVIF port is usually 80 or 8080) and asks it for its stream URLs. Some cameras use a separate ONVIF/service account rather than the device admin user, and some require **Use digest authentication** to be enabled.
+- **Manual selection** builds a stream URL from a template for the camera brand you pick (Dahua/Amcrest/EmpireTech, Hikvision/Uniview/Annke, Ubiquiti, Reolink, Axis, TP-Link, or Foscam). Choose **Other** to enter a custom RTSP URL directly. Non-RTSP stream types must be [configured manually](#setting-up-camera-inputs).
+
+The name you enter is lowercased and spaces become underscores. If the result still isn't a valid config key, the wizard generates a safe name and stores what you typed as `friendly_name`.
+
+### Step 2: Probe or snapshot
+
+In probe mode, the wizard reports what the camera returned (manufacturer, model, firmware, profile count, and whether PTZ, presets, and [autotracking](autotracking.md) are supported) along with the RTSP URLs it discovered. Test each candidate to see its resolution, frame rate, and codecs together with a snapshot, then select the one you want to use.
+
+In manual mode, the wizard tests the templated URL and shows the same metadata and snapshot.
+
+If no RTSP URLs are found, the credentials may be wrong or the camera may not support ONVIF. Go back and use manual selection instead.
+
+### Step 3: Stream configuration
+
+Assign [roles](#setting-up-camera-inputs) to the stream, and use **Add Another Stream** to add the camera's other streams, for example a substream for `detect` alongside the main stream for `record`. At least one stream must have the `detect` role before you can continue.
+
+**Reduce connections to camera** routes that input through the go2rtc restream so Frigate and the live view share a single connection to the camera instead of each opening their own. See [restream](restream.md) for more detail.
+
+### Step 4: Validation and testing
+
+Connect each stream to get a live preview, an estimated bandwidth figure, and a list of validation results. The wizard checks for the most common misconfigurations, including:
+
+- A detect resolution that is too high (increased resource usage) or too low for reliable detection, or one it could not probe at all
+- A stream marked `record` whose audio codec is not AAC, or that has no audio at all
+- A stream marked `audio` that carries no audio stream
+- Using a restreamed input for the `record` role
+- Brand-specific issues, such as an RTSP stream on a Reolink camera that should use http-flv, or a Dahua/Hikvision substream selected for `detect`
+
+**Use stream compatibility mode** passes the stream through go2rtc's ffmpeg module. Enable it if a stream fails to load after several attempts. Note that this also prevents [two way talk](/configuration/live#two-way-talk) from being detected for that stream.
+
+**Save New Camera** writes the configuration and starts the camera right away. No restart is required.
+
+Other features, including [hardware acceleration](hardware_acceleration_video.md), [two way talk](/configuration/live#two-way-talk), and audio transcoding, is configured after the camera has been added. For camera model specific quirks, see the [camera specific](camera_specific.md) docs.
+
+## Deleting a camera
+
+Click **Delete Camera** in <NavPath path="Settings > Global configuration > Camera management" />, choose the camera, and confirm. Deleting a camera requires the `admin` role and cannot be undone.
+
+:::warning
+
+Deleting a camera permanently removes its recordings, tracked objects, and configuration. If you only want to stop processing a camera, set its state to **Off** or **Disabled** in <NavPath path="Settings > Global configuration > Camera management" /> instead. See [camera state](/configuration/live#camera-state).
+
+:::
+
+Deleting a camera removes:
+
+- The camera's section of your config file, along with its entries in any [role](authentication.md#user-roles) camera list. A custom role left with no cameras is removed as well.
+- Every database record for the camera: tracked objects, review items, recordings, previews, timeline entries, the saved region grid, and [triggers](semantic_search.md#triggers).
+- Every media file for the camera: recordings, snapshots, thumbnails, and preview clips.
+
+[Exports](/usage/exports) are kept by default, so saved footage survives the deletion of the camera it came from. Turn on **Also delete exports for this camera** in the confirmation step to remove those too.
+
+The camera's processes are stopped and the change takes effect immediately, so no restart is required. If the resulting config cannot be parsed, Frigate restores the previous config and reports an error instead of leaving Frigate in a broken state.
+
+Two things are not cleaned up for you:
+
+- **go2rtc streams.** Frigate makes a best effort to stop a running [go2rtc](go2rtc.md) stream named after the camera, but stream entries in your config file remain and are recreated on the next restart. Remove them in <NavPath path="Settings > System > go2rtc streams" /> or in your config file.
+- **Camera groups.** A deleted camera stays listed in any [camera group](#setting-up-camera-groups) that referenced it. The group skips the missing camera, so this is harmless, but you can edit the group to drop the stale entry.
+
+## Setting Up Camera Inputs
+
+Several inputs can be configured for each camera and the role of each input can be mixed and matched based on your needs. This allows you to use a lower resolution stream for object detection, but create recordings from a higher resolution stream, or vice versa.
+
+A camera is enabled by default but can be disabled by using `enabled: False`. Cameras that are disabled through the configuration file will not appear in the Frigate UI and will not consume system resources.
+
+Each role can only be assigned to one input per camera. The options for roles are as follows:
+
+| Role         | Description                                                                                                  |
+| ------------ | ------------------------------------------------------------------------------------------------------------ |
+| `detect`     | Main feed for object detection. [docs](object_detectors.md)                                                  |
+| `record`     | Saves segments of the video feed based on configuration settings. [docs](record.md)                          |
+| `record_sub` | Saves segments of a second, lower quality stream with its own retention. [docs](record.md#sub-stream-recording) |
+| `audio`      | Feed for audio based detection. [docs](audio_detectors.md)                                                   |
+
+<ConfigTabs>
+<TabItem value="ui">
+
+Navigate to <NavPath path="Settings > Camera configuration > Streams (FFmpeg)" />.
+
+| Field             | Description                                                         |
+| ----------------- | ------------------------------------------------------------------- |
+| **Camera inputs** | List of input stream definitions (paths and roles) for this camera. |
+
+For each input you can choose its source: select **Restream (go2rtc)** to pick an existing [go2rtc stream](restream.md) from a dropdown (Frigate uses the `rtsp://127.0.0.1:8554/<stream>` path and `preset-rtsp-restream` input args for that input automatically), or **Manual input path** to type the stream URL directly.
+
+Navigate to <NavPath path="Settings > Camera configuration > Object detection" />.
+
+| Field             | Description                                                                                            |
+| ----------------- | ------------------------------------------------------------------------------------------------------ |
+| **Detect width**  | Width (pixels) of frames used for the detect stream; leave empty to use the native stream resolution.  |
+| **Detect height** | Height (pixels) of frames used for the detect stream; leave empty to use the native stream resolution. |
+
+</TabItem>
+<TabItem value="yaml">
+
+```yaml
+mqtt:
+  host: mqtt.server.com
+cameras:
+  back:
+    enabled: True
+    ffmpeg:
+      inputs:
+        - path: rtsp://viewer:{FRIGATE_RTSP_PASSWORD}@10.0.10.10:554/cam/realmonitor?channel=1&subtype=2
+          roles:
+            - detect
+        - path: rtsp://viewer:{FRIGATE_RTSP_PASSWORD}@10.0.10.10:554/live
+          roles:
+            - record
+    detect:
+      width: 1280 # <- optional, by default Frigate tries to automatically detect resolution
+      height: 720 # <- optional, by default Frigate tries to automatically detect resolution
+```
+
+</TabItem>
+</ConfigTabs>
+
+Additional cameras are simply added under the camera configuration section.
+
+<ConfigTabs>
+<TabItem value="ui">
+
+Navigate to <NavPath path="Settings > Global configuration > Camera management" /> and use the [Add Camera Wizard](#adding-a-camera-with-the-add-camera-wizard) to configure each additional camera.
+
+</TabItem>
+<TabItem value="yaml">
+
+```yaml
+mqtt: ...
+cameras:
+  back: ...
+  front: ...
+  side: ...
+```
+
+</TabItem>
+</ConfigTabs>
+
+:::note
+
+If you only define one stream in your `inputs` and do not assign a `detect` role to it, Frigate will automatically assign it the `detect` role. Frigate will always decode a stream to support motion detection, Birdseye, the API image endpoints, and other features, even if you have disabled object detection with `enabled: False` in your config's `detect` section.
+
+If you plan to use Frigate for recording only, it is still recommended to define a `detect` role for a low resolution stream to minimize resource usage from the required stream decoding.
+
+:::
+
+For camera model specific settings check the [camera specific](camera_specific.md) infos.
+
+## Setting up camera PTZ controls
+
+:::warning
+
+Not every PTZ supports ONVIF, which is the standard protocol Frigate uses to communicate with your camera. Check the [official list of ONVIF conformant products](https://www.onvif.org/conformant-products/), your camera documentation, or camera manufacturer's website to ensure your PTZ supports ONVIF. Also, ensure your camera is running the latest firmware.
+
+:::
+
+Configure the ONVIF connection for your camera to enable PTZ controls.
+
+<ConfigTabs>
+<TabItem value="ui">
+
+1. Navigate to <NavPath path="Settings > Camera configuration > ONVIF" /> and select your camera.
+   - Set **ONVIF host** to your camera's IP address, e.g.: `10.0.10.10`
+   - Set **ONVIF port** to your camera's ONVIF port, e.g.: `8000`
+   - Set **ONVIF username** to your camera's ONVIF username, e.g.: `admin`
+   - Set **ONVIF password** to your camera's ONVIF password, e.g.: `password`
+
+</TabItem>
+<TabItem value="yaml">
+
+```yaml {4-8}
+cameras:
+  back:
+    ffmpeg: ...
+    onvif:
+      host: 10.0.10.10
+      port: 8000
+      user: admin
+      password: password
+```
+
+</TabItem>
+</ConfigTabs>
+
+If the ONVIF connection is successful, PTZ controls will be available in the camera's WebUI.
+
+:::note
+
+Some cameras use a separate ONVIF/service account that is distinct from the device administrator credentials. If ONVIF authentication fails with the admin account, try creating or using an ONVIF/service user in the camera's firmware. Refer to your camera manufacturer's documentation for more.
+
+:::
+
+:::tip
+
+If your ONVIF camera does not require authentication credentials, you may still need to specify an empty string for `user` and `password`, eg: `user: ""` and `password: ""`.
+
+:::
+
+If a camera connects but fails to authenticate, two optional fields can help:
+
+- `tls_insecure`: Skips TLS certificate verification and sends the ONVIF password as plaintext (`PasswordText`) instead of a hashed digest (`PasswordDigest`). Some cameras reject the digest token and only accept plaintext. This weakens connection security, so only enable it on a trusted local network.
+- `ignore_time_mismatch`: ONVIF authentication tokens include a timestamp, and a camera will reject the token if its clock differs too much from Frigate's. Enabling this makes Frigate compensate for the time offset so authentication can still succeed. Running NTP on both the camera and the Frigate host is the recommended fix; only use this in a "safe" environment, as it slightly weakens token validation.
+
+If your camera has multiple ONVIF profiles, you can specify which one to use for PTZ control with the `profile` option, matched by token or name. When not set, Frigate selects the first profile with a valid PTZ configuration. Check the Frigate debug logs (`frigate.ptz.onvif: debug`) to see available profile names and tokens for your camera.
+
+An ONVIF-capable camera that supports relative movement within the field of view (FOV) can also be configured to automatically track moving objects and keep them in the center of the frame. For autotracking setup, see the [autotracking](autotracking.md) docs.
+
+## ONVIF PTZ camera recommendations
+
+This list of working and non-working PTZ cameras is based on user feedback. If you'd like to report specific quirks or issues with a manufacturer or camera that would be helpful for other users, open a pull request to add to this list.
+
+The FeatureList on the [ONVIF Conformant Products Database](https://www.onvif.org/conformant-products/) can provide a starting point to determine a camera's compatibility with Frigate's autotracking. Look to see if a camera lists `PTZRelative`, `PTZRelativePanTilt` and/or `PTZRelativeZoom`. These features are required for autotracking, but some cameras still fail to respond even if they claim support. If they are missing, autotracking will not work (though basic PTZ in the WebUI might). Avoid cameras with no database entry unless they are confirmed as working below.
+
+| Brand or specific camera     | PTZ Controls | Autotracking | Notes                                                                                                                                                                                                                                                             |
+| ---------------------------- | :----------: | :----------: | ----------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------- |
+| Amcrest                      |      ✅      |      ✅      | ⛔️ Generally, Amcrest should work, but some older models (like the common IP2M-841) don't support autotracking                                                                                                                                                    |
+| Amcrest ASH21                |      ✅      |      ❌      | ONVIF service port: 80                                                                                                                                                                                                                                            |
+| Amcrest IP4M-S2112EW-AI      |      ✅      |      ❌      | FOV relative movement not supported.                                                                                                                                                                                                                              |
+| Amcrest IP5M-1190EW          |      ✅      |      ❌      | ONVIF Port: 80. FOV relative movement not supported.                                                                                                                                                                                                              |
+| Annke CZ504                  |      ✅      |      ✅      | Annke support provide specific firmware ([V5.7.1 build 250227](https://github.com/pierrepinon/annke_cz504/raw/refs/heads/main/digicap_V5-7-1_build_250227.dav)) to fix issue with ONVIF "TranslationSpaceFov"                                                     |
+| Axis Q-6155E                 |      ✅      |      ❌      | ONVIF service port: 80; Camera does not support MoveStatus.                                                                                                                                                                                                       |
+| Ctronics PTZ                 |      ✅      |      ❌      |                                                                                                                                                                                                                                                                   |
+| Dahua                        |      ✅      |      ✅      | Some low-end Dahuas (lite series, picoo series (commonly), among others) have been reported to not support autotracking. These models usually don't have a four digit model number with chassis prefix and options postfix (e.g. DH-P5AE-PV vs DH-SD49825GB-HNR). |
+| Dahua DH-SD2A500HB           |      ✅      |      ❌      |                                                                                                                                                                                                                                                                   |
+| Dahua DH-SD49825GB-HNR       |      ✅      |      ✅      |                                                                                                                                                                                                                                                                   |
+| Dahua DH-P5AE-PV             |      ❌      |      ❌      |                                                                                                                                                                                                                                                                   |
+| Foscam                       |      ✅      |      ❌      | In general support PTZ, but not relative move. There are no official ONVIF certifications and tests available on the ONVIF Conformant Products Database                                                                                                           |
+| Foscam R5                    |      ✅      |      ❌      |                                                                                                                                                                                                                                                                   |
+| Foscam SD4                   |      ✅      |      ❌      |                                                                                                                                                                                                                                                                   |
+| Hanwha XNP-6550RH            |      ✅      |      ❌      |                                                                                                                                                                                                                                                                   |
+| Hikvision                    |      ✅      |      ❌      | Incomplete ONVIF support (MoveStatus won't update even on latest firmware) - reported with HWP-N4215IH-DE and DS-2DE3304W-DE, but likely others                                                                                                                   |
+| Hikvision DS-2DE3A404IWG-E/W |      ✅      |      ✅      |                                                                                                                                                                                                                                                                   |
+| Reolink                      |      ✅      |      ❌      |                                                                                                                                                                                                                                                                   |
+| Speco O8P32X                 |      ✅      |      ❌      |                                                                                                                                                                                                                                                                   |
+| Sunba 405-D20X               |      ✅      |      ❌      | Incomplete ONVIF support reported on original, and 4k models. All models are suspected incompatible.                                                                                                                                                              |
+| Tapo                         |      ✅      |      ❌      | Many models supported, ONVIF Service Port: 2020                                                                                                                                                                                                                   |
+| Uniview IPC672LR-AX4DUPK     |      ✅      |      ❌      | Firmware says FOV relative movement is supported, but camera doesn't actually move when sending ONVIF commands                                                                                                                                                    |
+| Uniview IPC6612SR-X33-VG     |      ✅      |      ✅      | Leave `calibrate_on_startup` as `False`. A user has reported that zooming with `absolute` is working.                                                                                                                                                             |
+| Vikylin PTZ-2804X-I2         |      ❌      |      ❌      | Incomplete ONVIF support                                                                                                                                                                                                                                          |
+
+## Setting up camera groups
+
+Camera groups let you organize cameras together with a shared name and icon, making it easier to review and filter them. A default group for all cameras is always available.
+
+<ConfigTabs>
+<TabItem value="ui">
+
+On the Live dashboard, press the **pencil icon** in the main navigation to add a new camera group. Configure the group name, select which cameras to include, choose an icon, and set the display order.
+
+</TabItem>
+<TabItem value="yaml">
+
+```yaml
+camera_groups:
+  front:
+    cameras:
+      - driveway_cam
+      - garage_cam
+    icon: LuCar
+    order: 0
+```
+
+</TabItem>
+</ConfigTabs>
+
+## Two-Way Audio
+
+See the guide [here](/configuration/live/#two-way-talk)

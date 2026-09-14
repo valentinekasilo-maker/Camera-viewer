@@ -1,0 +1,95 @@
+{
+  "title": "Custom Objects & Identities",
+  "subtitle": "Local-First spatial tracking, custom object recognition, and registered identities.",
+  "tabs": {
+    "presence": "Live Presence & Radar",
+    "identities": "Registered Identities",
+    "unknown": "Unknown Review Queue",
+    "history": "Movement & Sighting History",
+    "settings": "Camera Areas & Settings"
+  },
+  "presence": {
+    "title": "Current Location & Presence",
+    "subtitle": "Real-time tracked objects and enrolled identities across all monitored areas.",
+    "currently_present": "Currently Present",
+    "not_recently_seen": "Not Recently Seen",
+    "away": "Away / Not In View",
+    "no_active_tracks": "No active objects or identities currently visible in camera streams.",
+    "last_seen_at": "Last seen at {{area}} via {{camera}}",
+    "first_seen_at": "First detected at {{time}}",
+    "seen_ago": "{{time}} ago",
+    "active_now": "Active Now"
+  },
+  "identities_list": {
+    "title": "Enrolled Custom Objects & People",
+    "enroll_btn": "+ Enroll Identity",
+    "search_placeholder": "Search identities by name, color, or category...",
+    "filter_all": "All ({{count}})",
+    "filter_vehicles": "Vehicles",
+    "filter_people": "People",
+    "filter_pets": "Pets & Animals",
+    "filter_items": "Items & Packages",
+    "no_identities": "No registered identities found. Click \"+ Enroll Identity\" to register your first object or person.",
+    "references_count": "{{count}} reference images",
+    "sightings_count": "{{count}} sightings recorded",
+    "view_details": "View Details & History",
+    "delete_identity": "Delete Identity"
+  },
+  "unknown_queue": {
+    "title": "Unknown Objects & Unenrolled People",
+    "subtitle": "Newly detected physical objects and visitors awaiting user verification and enrollment.",
+    "no_unknowns": "No unknown objects in the queue. All detected items are identified or dismissed.",
+    "identify_btn": "Identify & Enroll",
+    "link_btn": "Link to Existing",
+    "dismiss_btn": "Dismiss",
+    "appearances": "{{count}} appearances across cameras"
+  },
+  "history": {
+    "title": "Object Movement & Sighting Timeline",
+    "subtitle": "Chronological audit log answering where objects and people were last seen.",
+    "filter_camera": "Filter by Camera",
+    "filter_area": "Filter by Area",
+    "no_history": "No sightings recorded yet.",
+    "table": {
+      "identity": "Identity / Track",
+      "area": "Monitored Area",
+      "camera": "Camera Source",
+      "timestamp": "Timestamp",
+      "confidence": "Match Confidence",
+      "snapshot": "Snapshot"
+    }
+  },
+  "settings": {
+    "title": "Spatial Camera Areas & Recognition Parameters",
+    "subtitle": "Configure human-readable camera locations and local similarity thresholds.",
+    "save_btn": "Save Settings",
+    "saved_toast": "Identity settings and camera areas saved successfully.",
+    "camera_areas": "Camera to Area Mappings",
+    "camera_name": "Camera Stream",
+    "area_name": "Mapped Area / Room",
+    "matching_threshold_object": "Object Match Similarity Threshold",
+    "matching_threshold_person": "Person Match Similarity Threshold (Strict)",
+    "unknown_threshold": "Unknown Object Sensitivity Threshold",
+    "presence_timeout": "Presence Active Timeout (seconds)",
+    "away_timeout": "Away State Timeout (seconds)",
+    "cooldown": "Recognition Cooldown (seconds)",
+    "cross_camera": "Enable Conservative Cross-Camera Spatial Tracking"
+  },
+  "modal": {
+    "add_title": "Enroll Custom Object / Identity",
+    "add_subtitle": "Register physical objects or authorized people with local reference photos.",
+    "edit_title": "Edit Identity Profile",
+    "name_label": "Identity Name (e.g. White Toyota Harrier, John, Dog Bruno)",
+    "category_label": "Category",
+    "object_class_label": "Frigate Object Class",
+    "color_label": "Color / Distinct Appearance",
+    "description_label": "Description & Ownership",
+    "notes_label": "Access & Area Notes",
+    "photos_label": "Upload Reference Photos (Multiple angles/lighting recommended)",
+    "drop_photos": "Click or drag & drop reference crops/images here",
+    "save": "Save Identity",
+    "cancel": "Cancel",
+    "identifying_track": "Identifying Track {{track_id}}",
+    "link_to_existing": "Select Existing Identity to Link"
+  }
+}
