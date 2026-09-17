@@ -2,16 +2,19 @@
   "name": "ANDRO-Vision",
   "short_name": "ANDRO-Vision",
   "description": "ANDRO-Vision — Local AI Vision & Smart Camera System",
+  "categories": ["utilities", "productivity"],
   "icons": [
     {
       "src": "/images/android-chrome-192x192.png",
       "sizes": "192x192",
-      "type": "image/png"
+      "type": "image/png",
+      "purpose": "any"
     },
     {
       "src": "/images/android-chrome-512x512.png",
       "sizes": "512x512",
-      "type": "image/png"
+      "type": "image/png",
+      "purpose": "any"
     },
     {
       "src": "/images/maskable-icon.png",
@@ -20,8 +23,26 @@
       "purpose": "maskable"
     }
   ],
-  "theme_color": "#ffffff",
-  "background_color": "#000000",
+  "theme_color": "#3b82f6",
+  "background_color": "#111827",
   "display": "standalone",
-  "start_url": "/"
+  "orientation": "any",
+  "start_url": "/",
+  "scope": "/",
+  "shortcuts": [
+    {
+      "name": "Live Cameras",
+      "short_name": "Live",
+      "description": "View live camera feeds",
+      "url": "/live",
+      "icons": [{ "src": "/images/android-chrome-192x192.png", "sizes": "192x192" }]
+    },
+    {
+      "name": "Review Events",
+      "short_name": "Review",
+      "description": "Review detected events",
+      "url": "/review",
+      "icons": [{ "src": "/images/android-chrome-192x192.png", "sizes": "192x192" }]
+    }
+  ]
 }

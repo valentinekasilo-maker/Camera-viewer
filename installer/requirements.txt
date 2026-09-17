@@ -1,0 +1,4 @@
+# ANDRO-Vision Launcher — Python Build Requirements
+# These packages are only needed for BUILDING the EXE, not for running the app.
+# Install with: pip install -r launcher/requirements.txt
+pyinstaller>=6.0

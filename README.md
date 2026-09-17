@@ -98,6 +98,49 @@ A complete, high-performance local AI Camera Intelligence and NVR monitoring sys
 - Node.js 18+ and npm
 - (Optional) Google Gemini API Key configured in your environment
 
+### ⚡ One-Click Launch (Windows EXE) — Recommended
+
+The easiest way to run ANDRO-Vision on Windows is with the pre-built launcher:
+
+1. **Download / copy** `CameraApp.exe` to the project root folder.
+2. **Double-click** `CameraApp.exe`.
+3. The launcher will automatically:
+   - Check Python and Node.js are available
+   - Install any missing npm packages
+   - Create required configuration files
+   - Start the backend (FastAPI) on port 5000
+   - Start the frontend dev server (Vite) on port 5173
+   - Wait until both services are ready
+   - Open your browser at `http://127.0.0.1:5173`
+
+**Requirements on the target PC:**
+- Windows 10/11 (64-bit)
+- [Python 3.11+](https://www.python.org/downloads/) in PATH
+- [Node.js 18+](https://nodejs.org/) in PATH
+- All Python backend packages (see below)
+
+> If `CameraApp.exe` is not yet built, follow the build instructions below.
+
+---
+
+### 🔨 Building the EXE
+
+```powershell
+# From the project root:
+powershell -ExecutionPolicy Bypass -File installer\build_exe.ps1
+```
+
+The EXE is output directly to the project root as `CameraApp.exe`.
+
+To clean and rebuild from scratch:
+```powershell
+powershell -ExecutionPolicy Bypass -File installer\build_exe.ps1 -Clean
+```
+
+---
+
+### 🖥️ Manual Dev Setup (Alternative)
+
 ### 1. Environment Setup
 ```powershell
 # Set Gemini API Key (optional, built-in key pre-configured)
@@ -118,6 +161,31 @@ npm install
 npm run dev
 ```
 *Web Application available at `http://localhost:5173/`*
+
+---
+
+### 🌐 Install as a Windows App (PWA)
+
+ANDRO-Vision supports installation as a native-style Windows application via your browser:
+
+1. Open `http://127.0.0.1:5173` in **Chrome** or **Edge**
+2. Click the **Install** icon in the browser address bar (or menu → "Install ANDRO-Vision")
+3. The app opens in its own window without browser chrome
+
+---
+
+### 🩺 Troubleshooting Launcher Issues
+
+| Problem | Solution |
+|---------|----------|
+| "Python not found" | Install Python 3.11+ and check "Add to PATH" during install |
+| "Node.js not found" | Install Node.js 18+ from nodejs.org |
+| "Port 5000 is occupied" | Find and close the process: `netstat -ano \| findstr :5000` |
+| "Backend did not respond" | Check `logs\backend.log` for Python errors |
+| "Frontend did not respond" | Check `logs\frontend.log` for Vite errors |
+| Config missing | Launcher auto-creates `.env` and `config.yml` from examples |
+
+Log files are written to `logs/` in the project root.
 
 ---
 

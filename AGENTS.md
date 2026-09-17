@@ -242,8 +242,8 @@ python3 -u -m mypy --config-file frigate/mypy.ini frigate
 # annotated with each endpoint's auth requirement (admin / any / camera /
 # public). NEVER edit that file by hand. CI runs the --check variant and fails
 # if it is out of date. (from repo root)
-python3 generate_api_auth_spec.py
-python3 generate_api_auth_spec.py --check
+python3 scripts/generate_api_auth_spec.py
+python3 scripts/generate_api_auth_spec.py --check
 ```
 
 ### Frontend (from web/ directory)
@@ -288,7 +288,7 @@ PYTHONPATH=. python3 web/e2e/fixtures/mock-data/generate-mock-data.py
 # web/public/locales/en/config/{global,cameras}.json. NEVER edit those
 # JSON files by hand; change the Pydantic field title/description and
 # re-run this script. (from repo root)
-python3 generate_config_translations.py
+python3 scripts/generate_config_translations.py
 
 # Extract i18n keys from source into the locale files after adding
 # new t() calls. Use the :ci variant to verify the locale files are
@@ -325,7 +325,7 @@ async def get_events(request: Request, limit: int = 100):
     # Implementation
 ```
 
-After adding, changing, or removing an endpoint (or its auth dependency), regenerate the OpenAPI spec with `python3 generate_api_auth_spec.py` so `docs/static/frigate-api.yaml` stays in sync and the endpoint's auth requirement is documented. CI enforces this via the `--check` variant; never edit that file by hand.
+After adding, changing, or removing an endpoint (or its auth dependency), regenerate the OpenAPI spec with `python3 scripts/generate_api_auth_spec.py` so `docs/static/frigate-api.yaml` stays in sync and the endpoint's auth requirement is documented. CI enforces this via the `--check` variant; never edit that file by hand.
 
 ### Configuration Access
 

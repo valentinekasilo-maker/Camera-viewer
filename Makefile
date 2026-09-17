@@ -6,7 +6,7 @@ IMAGE_REPO ?= ghcr.io/blakeblackshear/frigate
 GITHUB_REF_NAME ?= $(shell git rev-parse --abbrev-ref HEAD)
 BOARDS= #Initialized empty
 
-include docker/*/*.mk
+include deploy/docker/*/*.mk
 
 build-boards: $(BOARDS:%=build-%)
 
@@ -17,33 +17,33 @@ version:
 	echo 'VITE_GIT_COMMIT_HASH=$(COMMIT_HASH)' > web/.env
 
 local: version
-	docker buildx build --target=frigate --file docker/main/Dockerfile . \
+	docker buildx build --target=frigate --file deploy/docker/main/Dockerfile . \
 		--tag frigate:latest \
 		--load
 
 debug: version
-	docker buildx build --target=frigate --file docker/main/Dockerfile . \
+	docker buildx build --target=frigate --file deploy/docker/main/Dockerfile . \
 	    --build-arg DEBUG=true \
 		--tag frigate:latest \
 		--load
 
 amd64:
-	docker buildx build --target=frigate --file docker/main/Dockerfile . \
+	docker buildx build --target=frigate --file deploy/docker/main/Dockerfile . \
 		--tag $(IMAGE_REPO):$(VERSION)-$(COMMIT_HASH) \
 		--platform linux/amd64
 
 arm64:
-	docker buildx build --target=frigate --file docker/main/Dockerfile . \
+	docker buildx build --target=frigate --file deploy/docker/main/Dockerfile . \
 		--tag $(IMAGE_REPO):$(VERSION)-$(COMMIT_HASH) \
 		--platform linux/arm64
 
 build: version amd64 arm64
-	docker buildx build --target=frigate --file docker/main/Dockerfile . \
+	docker buildx build --target=frigate --file deploy/docker/main/Dockerfile . \
 		--tag $(IMAGE_REPO):$(VERSION)-$(COMMIT_HASH) \
 		--platform linux/arm64/v8,linux/amd64
 
 push: push-boards
-	docker buildx build --target=frigate --file docker/main/Dockerfile . \
+	docker buildx build --target=frigate --file deploy/docker/main/Dockerfile . \
 		--tag $(IMAGE_REPO):${GITHUB_REF_NAME}-$(COMMIT_HASH) \
 		--platform linux/arm64/v8,linux/amd64 \
 		--push

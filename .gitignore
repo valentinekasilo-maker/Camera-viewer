@@ -48,3 +48,13 @@ test_cam1.webp
 test_cam1_real.jpg
 test_proxy_cam1.jpg
 
+# Launcher build artifacts
+dist/
+build/
+launcher/__pycache__/
+logs/*.log
+logs/npm_install.log
+
+# PyInstaller
+*.spec.bak
+
